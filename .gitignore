@@ -1,0 +1,6 @@
+# stuff
+.DS_Store
+.venv
+*.pyi
+*.pyo
+.vscode/
