@@ -4,3 +4,4 @@
 *.pyi
 *.pyo
 .vscode/
+__pycache__
