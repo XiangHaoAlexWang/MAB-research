@@ -19,7 +19,8 @@ __all__ = [
     # .experiment
     'run_experiment',
     'run_spsamf_experiment',
-    'run_strategy_experiment'
+    'run_strategy_experiment',
+    'run_strategy_experiment_with_history'
 ]
 
 from .util import *

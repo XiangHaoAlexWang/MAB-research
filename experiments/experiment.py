@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, overload
 import numpy as np
 from .environment import Env, SPSAMFEnv, StochasticSPSAMFEnv
 from .algorithms import epsilon_greedy, epsilon_greedy_decay, ucb1, thompson_sampling_bernoulli, explore_then_commit, sp_ucb1
@@ -6,7 +6,8 @@ from .algorithms import epsilon_greedy, epsilon_greedy_decay, ucb1, thompson_sam
 __all__ = [
     'run_experiment',
     'run_spsamf_experiment',
-    'run_strategy_experiment'
+    'run_strategy_experiment',
+    'run_strategy_experiment_with_history'
 ]
 
 
@@ -33,9 +34,11 @@ def run_experiment(num_runs: int, means: list[float], rng: np.random.Generator, 
     DECAY_RATE: float
         for the decaying epsilon greedy
     ETC_M: int
-        number of rounds to run the exploration phase of Explore then commit for each arm
+        number of rounds to run the exploration phase of Explore then
+        scommit for each arm
     """
-    # Dictionary to hold the raw regret histories for all 40 runs per algorithm
+    # Dictionary to hold the raw regret histories for all 40 runs per
+    # algorithm
     # Format: { algorithm_name: list of lists (shape: 40 runs x total_steps) }
     raw_regrets = {
         "Epsilon-Greedy": [],
@@ -89,7 +92,9 @@ def run_experiment(num_runs: int, means: list[float], rng: np.random.Generator, 
     return averaged_regrets
 
 
-def run_spsamf_experiment(means: list[float], top_means: list[float], rng: np.random.Generator, noisy: bool, num_runs: int, total_steps: int):
+def run_spsamf_experiment(means: list[float], top_means: list[float],
+                          rng: np.random.Generator, noisy: bool,
+                          num_runs: int, total_steps: int):
     """
     Run a SP+SAMF experiment to compare the stochastic and original versions
     """
@@ -120,21 +125,31 @@ def run_spsamf_experiment(means: list[float], top_means: list[float], rng: np.ra
     avg_regret = np.mean(np.vstack(regret_histories), axis=0)
     return avg_regret, regret_histories
 
+@overload
+def run_strategy_experiment( means: list[float], top_means: list[float],
+                            rng: np.random.Generator, num_runs: int,
+                            total_steps: int, strategy: Literal['optimal'],
+                            noisy: bool, eps: float 
+): ...
 
-def run_strategy_experiment(
-    means: list[float],
-    top_means: list[float],
-    rng: np.random.Generator,
-    num_runs: int,
-    total_steps: int,
-    strategy: Literal['optimal'] | Literal['underbid'] | Literal['overbid'],
-    amount: float | None = None,
-    noisy: bool = False,
-    eps: float = 0.01,
+@overload
+def run_strategy_experiment( means: list[float], top_means: list[float],
+                            rng: np.random.Generator, num_runs: int,
+                            total_steps: int, strategy: Literal['underbid']
+                            | Literal['overbid'], noisy: bool, eps: float, 
+                            amount: float
+): ...
+
+def run_strategy_experiment( means: list[float], top_means: list[float],
+                            rng: np.random.Generator, num_runs: int,
+                            total_steps: int, strategy: Literal['optimal']
+                            | Literal['underbid'] | Literal['overbid'],
+                            noisy: bool, eps: float, amount: float
+                            | None = None 
 ):
     """
-    Run a SP+SAMF experiment for a specific arm-bidding strategy and return
-    averaged platform reward and arm utilities.
+    Run a SP+SAMF experiment for a specific arm-bidding strategy and
+    return averaged platform reward and arm utilities.
 
     Parameters
     ----------
@@ -164,9 +179,11 @@ def run_strategy_experiment(
     """
     assert num_runs > 0
     if strategy not in {"optimal", "underbid", "overbid"}:
-        raise ValueError("strategy must be one of {'optimal', 'underbid', 'overbid'}")
+        raise ValueError("strategy must be one of {'optimal', 'underbid',"
+                         " 'overbid'}")
     if strategy != "optimal" and amount is None:
-        raise ValueError("amount must be provided for underbid/overbid strategies")
+        raise ValueError("amount must be provided for underbid/overbid "
+                         "strategies")
 
     platform_rewards = []
     utility_histories = []
@@ -198,3 +215,44 @@ def run_strategy_experiment(
     avg_platform_reward = float(np.mean(platform_rewards))
     avg_arm_utilities = np.mean(np.vstack(utility_histories), axis=0).tolist()
     return [avg_platform_reward, avg_arm_utilities]
+
+def run_strategy_experiment_with_history(
+    means: list[float],
+    top_means: list[float],
+    rng: np.random.Generator,
+    num_runs: int,
+    total_steps: int,
+    strategy: str,
+    amount: float | None = None,
+    noisy: bool = False,
+    eps: float = 0.01,
+):
+    assert num_runs > 0
+    if strategy not in {"optimal", "underbid", "overbid"}:
+        raise ValueError("strategy must be one of {'optimal', 'underbid', 'overbid'}")
+    if strategy != "optimal" and amount is None:
+        raise ValueError("amount must be provided for underbid/overbid strategies")
+
+    platform_reward_histories = []
+    utility_histories = []
+
+    for _ in range(num_runs):
+        if noisy:
+            env = StochasticSPSAMFEnv(means, top_means, eps, rng, strategy, amount) # pyright: ignore[reportArgumentType]
+        else:
+            env = SPSAMFEnv(means, top_means, rng, strategy, amount) # pyright: ignore[reportArgumentType]
+
+        bids = env.get_bids()
+        # Unpack the second return value from sp_ucb1, which contains the step-by-step rewards
+        _, step_rewards, total_reward = sp_ucb1(len(means), total_steps, env, bids)
+        
+        # Compute the cumulative platform reward over the time steps for this run
+        cumulative_rewards = np.cumsum(step_rewards)
+        platform_reward_histories.append(cumulative_rewards)
+        utility_histories.append(np.array(env.arm_utility, dtype=float))
+
+    # Average the step-by-step cumulative rewards across all simulation runs
+    avg_platform_reward_history = np.mean(np.vstack(platform_reward_histories), axis=0)
+    avg_arm_utilities = np.mean(np.vstack(utility_histories), axis=0).tolist()
+    
+    return avg_platform_reward_history, avg_arm_utilities

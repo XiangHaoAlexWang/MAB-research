@@ -63,7 +63,8 @@ def epsilon_greedy(K: int, total_steps: int, epsilon: float, env: Env):
     return values, counts, total_reward
 
 
-def epsilon_greedy_decay(K: int, total_steps: int, epsilon_start: float, epsilon_min: float, decay_rate: float, env: Env):
+def epsilon_greedy_decay(K: int, total_steps: int, epsilon_start: float,
+                         epsilon_min: float, decay_rate: float, env: Env):
     """
     Run the epsilon-greedy algorithm with decaying epsilon.
 
@@ -78,7 +79,8 @@ def epsilon_greedy_decay(K: int, total_steps: int, epsilon_start: float, epsilon
     epsilon_min: float
         Minimum exploration probability (typically 0.01 to 0.1)
     decay_rate: float
-        Multiplicative factor to decrease epsilon each step (typically 0.99 to 0.999)
+        Multiplicative factor to decrease epsilon each step (typically
+        0.99 to 0.999)
     env: Env
         The environment to run in
 
@@ -201,13 +203,15 @@ def thompson_sampling_bernoulli(K: int, total_steps: int, env: Env):
     Returns
     -------
     values: list[float]
-        The estimated probabilities of success for each arm after the algorithm has run.
+        The estimated probabilities of success for each arm after the 
+        algorithm has run.
     counts: list[int]
         The number of times each arm was pulled.
     total_reward: float
         The total reward accumulated over all rounds.
     """
-    # Initialize Beta prior parameters (alpha = 1, beta = 1 represents uniform prior)
+    # Initialize Beta prior parameters (alpha = 1, beta = 1 represents
+    # uniform prior)
     alphas = [1.0] * K
     betas = [1.0] * K
     total_reward = 0
@@ -249,7 +253,8 @@ def explore_then_commit(K: int, total_steps: int, m: int, env: Env):
     total_steps: int
         Number of rounds to play
     m: int
-        Number of times to explore each arm initially (total exploration phase = K * m)
+        Number of times to explore each arm initially (total exploration
+        phase = K * m)
     env: Env
         Environment object with pull_arm method
 
@@ -278,7 +283,8 @@ def explore_then_commit(K: int, total_steps: int, m: int, env: Env):
     # Find the best arm based on exploration phase
     best_arm = values.index(max(values))
 
-    # 2. Exploitation (Commit) Phase: Pull only the best arm for the remaining steps
+    # 2. Exploitation (Commit) Phase: Pull only the best arm for the
+    # remaining steps
     remaining_steps = total_steps - (K * m)
     for _ in range(max(0, remaining_steps)):
         reward = env.pull_arm(best_arm)
@@ -290,7 +296,8 @@ def explore_then_commit(K: int, total_steps: int, m: int, env: Env):
     return values, counts, total_reward
 
 
-def sp_ucb1(K: int, total_steps: int, env: StochasticSPSAMFEnv | SPSAMFEnv, bids: list[float]):
+def sp_ucb1(K: int, total_steps: int, env: StochasticSPSAMFEnv | SPSAMFEnv,
+            bids: list[float]):
     """
     Run the UCB1 algorithm for SP+SAMF
 
@@ -347,16 +354,20 @@ def sp_ucb1(K: int, total_steps: int, env: StochasticSPSAMFEnv | SPSAMFEnv, bids
         values[chosen_arm] += (reward - values[chosen_arm]) / n
 
         # Eliminate arms that underbid during the bidding stage:
-        # Define $\widehat \mu_i=\frac{1}{N_i}\sum_{s:I_s=i}Y_{i,s}$, and $b_i=\sqrt{\frac{2}{N_i}}$.
-        # If the arm reports $\widehat\mu_i<m'$, but $\widehat \mu_i-b_i>m'+\epsilon$, then the algorithm will penalize or eliminate it.
+        # Define $\widehat \mu_i=\frac{1}{N_i}\sum_{s:I_s=i}Y_{i,s}$,
+        # and $b_i=\sqrt{\frac{2}{N_i}}$.
+        # If the arm reports $\widehat\mu_i<m'$, but $\widehat
+        # \mu_i-b_i>m'+\epsilon$, then the algorithm will penalize or
+        # eliminate it.
         if isinstance(env, StochasticSPSAMFEnv):
             for arm in range(K):
                 if counts[arm] > 0:
                     estimated_mean = values[arm]
                     bonus = math.sqrt(2 / counts[arm])
-                    if bids[arm] < mprime and (estimated_mean - bonus) > (mprime + env.eps):
+                    if estimated_mean - bonus > bids[arm] + env.eps:
                         # Penalize or eliminate the arm
-                        # Set its estimated value to -100 to discourage selection
+                        # Set its estimated value to -100 to discourage
+                        # selection
                         values[arm] = -100
                         # Make count almost infinite minimize exploration term
                         counts[arm] = 1000000000

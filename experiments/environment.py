@@ -62,128 +62,9 @@ class Env:
         self.regret_history.append(self.regret)
         return sample_bernoulli(self.means[arm], self.rng)
 
-
-class SPSAMFEnv(Env):
-    """
-    An SP+SAMF environment. This environment runs the original SP+SAMF algorithm in a noisy environment.
-
-    Parameters
-    ----------
-    means: list[float]
-        The means for each arm
-    top_means: list[float]
-        The top means for each arm
-    rng: np.random.Generator
-        The random number generator to use for the environment
-    strategy: 'optimal' | 'underbid' | 'overbid'
-        The strategy for the arms to follow
-    amount: float
-        The amount to overbid or underbid by
-
-    Attributes
-    ----------
-    means: list[float]
-        The means for each arm
-    top_means: list[float]
-        The top means for each arm
-    strategy: 'optimal' | 'underbid' | 'overbid'
-        The strategy for the arms to follow
-    amount: float
-        The amount to overbid or underbid by
-    pull_history: list[int]
-        The history of the arms pulled.
-    arm_utility_history: list[list[float]]
-        The history of the utilities for each arm.
-    arm_utility: list[float]
-        The arms' utilities
-    mprime: float
-        The second highest mean for the arms.
-    regret: float
-        The regret of the platform.
-    regret_history: list[float]
-        The history of the regret of the platform.
-
-    Raises
-    ------
-    AssertionError when you pass both 'optimal' and a value, or when the strategy is invalid.
-    """
-    @overload
-    def __init__(self, means: list[float], top_means: list[float], rng: np.random.Generator, strategy: Literal['underbid'] | Literal['overbid'], amount: float):
-        ...
-
-    @overload
-    def __init__(self, means: list[float], top_means: list[float], rng: np.random.Generator, strategy: Literal['optimal']):
-        ...
-
-    def __init__(self, means: list[float], top_means: list[float], rng: np.random.Generator, strategy: Literal['optimal'] | Literal['underbid'] | Literal['overbid'], amount: float | None = None):
-        # must be one of the three choices
-        assert (strategy in ('optimal', 'underbid', 'overbid'))
-        # cannot be both optimal strategy and give amount.
-        assert not ((strategy == 'optimal') and amount)
-        super().__init__(means, rng)
-        self.top_means = top_means
-        self.strategy = strategy
-        self.arm_utility_history: list[list[float]] = [[0] * len(self.means)]
-        self.arm_utility = [0.] * len(self.means)
-        self.amount = amount
-        self.mprime = sorted(self.top_means)[-2]
-        self.use_means = []
-        self.top = max(top_means)
-        for i in self.top_means:
-            if i <= self.mprime:
-                self.use_means.append(i)
-            else:
-                if self.strategy == 'optimal':
-                    self.use_means.append(
-                        min(i, self.mprime + math.log(len(self.means))))
-                elif self.strategy == 'underbid':
-                    assert self.amount
-                    if i == self.mprime:
-                        self.use_means.append(i - self.amount)
-                    else:
-                        self.use_means.append(
-                            min(i, self.mprime + math.log(len(self.means))))
-                elif self.strategy == 'overbid':
-                    assert self.amount
-                    if i == self.mprime:
-                        self.use_means.append(i + self.amount)
-                    else:
-                        self.use_means.append(
-                            min(i, self.mprime + math.log(len(self.means))))
-
-    def get_bids(self) -> list[float]:
-        """
-        Get the bids for all of the arms.
-
-        Returns
-        -------
-        A list containing the floats for the bids
-        """
-        l = []
-        for arm in range(len(self.means)):
-            l.append(self.pull_arm(arm))
-        return l
-
-    def pull_arm(self, arm: int) -> Literal[0] | Literal[1]:
-        """
-        Pull the selected arm
-
-        Parameters
-        ----------
-        arm: (int)
-            Which arm to pull
-
-        Returns
-        -------
-        The result of the pull
-        """
-        self.arm_utility[arm] += 1
-        self.arm_utility[arm] -= self.use_means[arm] - self.means[arm]
-        self.arm_utility_history.append(self.arm_utility)
-        self.pull_history.append(arm)
-        self.regret += self.top - self.use_means[arm]
-        self.regret_history.append(self.regret)
-        return sample_bernoulli(self.use_means[arm], self.rng)
+# BUG: underbid just reduces effort
+# BUG: overbid isn't possible -- an arm cannot just put more effort in
+# then it's top effort. It should instead put in less effort later.
 
 
 class StochasticSPSAMFEnv(Env):
@@ -232,17 +113,25 @@ class StochasticSPSAMFEnv(Env):
 
     Raises
     ------
-    AssertationError when you pass both 'optimal' and a value, or when the strategy is invalid.
+    AssertationError when you pass both 'optimal' and a value, or when
+    the strategy is invalid.
     """
     @overload
-    def __init__(self, means: list[float], top_means: list[float], eps, rng: np.random.Generator, strategy: Literal['underbid'] | Literal['overbid'], amount: float):
+    def __init__(self, means: list[float], top_means: list[float], eps,
+                 rng: np.random.Generator,
+                 strategy: Literal['underbid'] | Literal['overbid'],
+                 amount: float):
         ...
 
     @overload
-    def __init__(self, means: list[float], top_means: list[float], eps, rng: np.random.Generator, strategy: Literal['optimal']):
+    def __init__(self, means: list[float], top_means: list[float], eps,
+                 rng: np.random.Generator, strategy: Literal['optimal']):
         ...
 
-    def __init__(self, means: list[float], top_means: list[float], eps, rng: np.random.Generator, strategy: Literal['optimal'] | Literal['underbid'] | Literal['overbid'], amount: float | None = None):
+    def __init__(self, means: list[float], top_means: list[float], eps,
+                 rng: np.random.Generator,
+                 strategy: Literal['optimal'] | Literal['underbid']
+                 | Literal['overbid'], amount: float | None = None):
         # must be one of the three choices
         assert (strategy in ('optimal', 'underbid', 'overbid'))
         # cannot be both optimal strategy and give amount.
@@ -254,27 +143,46 @@ class StochasticSPSAMFEnv(Env):
         self.arm_utility = [0.] * len(self.means)
         self.amount = amount
         self.mprime = sorted(self.top_means)[-2]
-        self.use_means = []
+        self.use_means: list[float] = []
+        self.bid_means: list[float] = []
+        self.init_means()
         self.eps = eps
         self.top = max(self.top_means)
+
+    def init_means(self):
         for i in self.top_means:
-            if i <= self.mprime:
-                self.use_means.append(i)
+            if i < self.mprime:
+                self.bid_means.append(i)
             else:
                 if self.strategy == 'optimal':
-                    self.use_means.append(
+                    self.bid_means.append(
                         min(i, self.mprime + math.log(len(self.means))))
                 elif self.strategy == 'underbid':
                     assert self.amount
                     if i == self.mprime:
-                        self.use_means.append(i - self.amount)
+                        self.bid_means.append(i - self.amount)
                     else:
-                        self.use_means.append(
+                        self.bid_means.append(
                             min(i, self.mprime + math.log(len(self.means))))
                 elif self.strategy == 'overbid':
                     assert self.amount
+                    self.bid_means.append(
+                        min(i, self.mprime + math.log(len(self.means))))
+        for i in self.top_means:
+            if i < self.mprime:
+                self.use_means.append(i)
+            else:
+                if self.strategy == "optimal":
+                    self.use_means.append(
+                        min(i, self.mprime + math.log(len(self.means))))
+                elif self.strategy == 'underbid':
+                    assert self.amount
+                    self.use_means.append(
+                        min(i, self.mprime + math.log(len(self.means))))
+                elif self.strategy == 'overbid':
+                    assert self.amount
                     if i == self.mprime:
-                        self.use_means.append(i + self.amount)
+                        self.use_means.append(i - self.amount)
                     else:
                         self.use_means.append(
                             min(i, self.mprime + math.log(len(self.means))))
@@ -298,6 +206,27 @@ class StochasticSPSAMFEnv(Env):
 
         return l
 
+    def pull_arm_for_bid(self, arm: int) -> Literal[0] | Literal[1]:
+        """
+        Pull the selected arm for bidding.
+
+        Parameters
+        ----------
+        arm: int
+            which arm to pull
+
+        Returns
+        -------
+        The result of the pull
+        """
+        self.arm_utility[arm] += 1
+        self.arm_utility[arm] -= self.bid_means[arm] - self.means[arm]
+        self.arm_utility_history.append(self.arm_utility)
+        self.pull_history.append(arm)
+        self.regret += self.top - self.bid_means[arm]
+        self.regret_history.append(self.regret)
+        return sample_bernoulli(self.bid_means[arm], self.rng)
+
     def pull_arm(self, arm: int) -> Literal[0] | Literal[1]:
         """
         Pull the selected arm
@@ -318,3 +247,80 @@ class StochasticSPSAMFEnv(Env):
         self.regret += self.top - self.use_means[arm]
         self.regret_history.append(self.regret)
         return sample_bernoulli(self.use_means[arm], self.rng)
+
+class SPSAMFEnv(StochasticSPSAMFEnv):
+    """
+    An SP+SAMF environment. This environment runs the original SP+SAMF
+    algorithm in a noisy environment.
+
+    Parameters
+    ----------
+    means: list[float]
+        The means for each arm
+    top_means: list[float]
+        The top means for each arm
+    rng: np.random.Generator
+        The random number generator to use for the environment
+    strategy: 'optimal' | 'underbid' | 'overbid'
+        The strategy for the arms to follow
+    amount: float
+        The amount to overbid or underbid by
+
+    Attributes
+    ----------
+    means: list[float]
+        The means for each arm
+    top_means: list[float]
+        The top means for each arm
+    strategy: 'optimal' | 'underbid' | 'overbid'
+        The strategy for the arms to follow
+    amount: float
+        The amount to overbid or underbid by
+    pull_history: list[int]
+        The history of the arms pulled.
+    arm_utility_history: list[list[float]]
+        The history of the utilities for each arm.
+    arm_utility: list[float]
+        The arms' utilities
+    mprime: float
+        The second highest mean for the arms.
+    regret: float
+        The regret of the platform.
+    regret_history: list[float]
+        The history of the regret of the platform.
+
+    Raises
+    ------
+    AssertionError when you pass both 'optimal' and a value, or when the strategy is invalid.
+    """
+    @overload
+    def __init__(self, means: list[float], top_means: list[float],
+                 rng: np.random.Generator,
+                 strategy: Literal['underbid'] | Literal['overbid'],
+                 amount: float):
+        ...
+
+    @overload
+    def __init__(self, means: list[float], top_means: list[float],
+                 rng: np.random.Generator, strategy: Literal['optimal']):
+        ...
+
+    def __init__(self, means: list[float], top_means: list[float],
+                 rng: np.random.Generator,
+                 strategy: Literal['optimal'] | Literal['underbid'] |
+                 Literal['overbid'],
+                 amount: float | None = None):
+        super().__init__(means, top_means, 0, rng, strategy, amount) # pyright: ignore[reportArgumentType]
+
+    def get_bids(self) -> list[float]:
+        """
+        Get the bids for all of the arms.
+
+        Returns
+        -------
+        A list containing the floats for the bids
+        """
+        l = []
+        for arm in range(len(self.means)):
+            l.append(self.pull_arm_for_bid(arm))
+        return l
